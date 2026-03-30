@@ -1,20 +1,32 @@
 export default async function handler(req, res) {
+  // 🔹 Só aceita POST
   if (req.method !== "POST") {
-    return res.status(405).send("Method Not Allowed");
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  if (req.headers["x-token"] !== process.env.SECRET) {
-  return res.status(403).end();
-}
+  // 🔹 Validação do token (só se existir SECRET)
+  if (process.env.SECRET) {
+    const token = req.headers["x-token"];
+
+    if (!token || token !== process.env.SECRET) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+  }
 
   try {
-    const issue = req.body.issue;
+    console.log("BODY:", req.body);
+
+    const issue = req.body?.issue;
+
+    if (!issue) {
+      return res.status(400).json({ error: "Payload inválido" });
+    }
 
     const message = {
       content: `🆕 ${issue.key} - ${issue.fields.summary}`
     };
 
-    await fetch(process.env.DISCORD_WEBHOOK, {
+    const discordResponse = await fetch(process.env.DISCORD_WEBHOOK, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -22,9 +34,17 @@ export default async function handler(req, res) {
       body: JSON.stringify(message)
     });
 
+    // 🔹 Debug se Discord falhar
+    if (!discordResponse.ok) {
+      const text = await discordResponse.text();
+      console.error("Erro Discord:", text);
+      return res.status(500).json({ error: "Erro ao enviar pro Discord" });
+    }
+
     return res.status(200).json({ ok: true });
+
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Erro interno" });
+    console.error("ERRO:", err);
+    return res.status(500).json({ error: err.message });
   }
 }
