@@ -16,14 +16,23 @@ export default async function handler(req, res) {
   try {
     console.log("BODY:", req.body);
 
+    const webhookEvent = req.body?.webhookEvent || "";
     const issue = req.body?.issue;
 
     if (!issue) {
       return res.status(400).json({ error: "Payload inválido" });
     }
 
+    const issueKey = issue.key || issue.id || "Issue sem chave";
+    const summary = issue.fields?.summary || "Sem resumo";
+
+    let prefix = "🔔";
+    if (webhookEvent.includes("issue_created")) prefix = "🆕";
+    if (webhookEvent.includes("issue_updated")) prefix = "✏️";
+    if (webhookEvent.includes("issue_deleted")) prefix = "🗑️";
+
     const message = {
-      content: `🆕 ${issue.key} - ${issue.fields.summary}`
+      content: `${prefix} ${issueKey} - ${summary}`
     };
 
     const discordResponse = await fetch(process.env.DISCORD_WEBHOOK, {
@@ -41,7 +50,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Erro ao enviar pro Discord" });
     }
 
-    return res.status(200).json({ ok: true });
+    return res.status(200).json({ ok: true, webhookEvent });
 
   } catch (err) {
     console.error("ERRO:", err);
