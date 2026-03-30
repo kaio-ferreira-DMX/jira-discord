@@ -3,6 +3,10 @@ export default async function handler(req, res) {
     return res.status(405).send("Method Not Allowed");
   }
 
+  if (req.headers["x-token"] !== process.env.SECRET) {
+  return res.status(403).end();
+}
+
   try {
     const issue = req.body.issue;
 
