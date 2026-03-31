@@ -17,7 +17,8 @@ function getJiraConfig() {
     apiToken: getRequiredEnv("JIRA_API_TOKEN"),
     projectKey: getRequiredEnv("JIRA_PROJECT_KEY"),
     defaultIssueType: process.env.JIRA_DEFAULT_ISSUE_TYPE || "Task",
-    discordJiraUserMap: safeJsonParse(process.env.DISCORD_JIRA_USER_MAP || "{}") || {}
+    discordJiraUserMap: safeJsonParse(process.env.DISCORD_JIRA_USER_MAP || "{}") || {},
+    boardId: process.env.JIRA_BOARD_ID
   };
 }
 
@@ -29,6 +30,16 @@ function getAuthHeader(email, apiToken) {
 async function jiraRequest(path, { method = "GET", body, query } = {}) {
   const { baseUrl, email, apiToken } = getJiraConfig();
   const url = new URL(`${baseUrl}${JIRA_API_BASE}${path}`);
+  return doRequest(url, { email, apiToken, method, body, query });
+}
+
+async function jiraSoftwareRequest(path, { method = "GET", body, query } = {}) {
+  const { baseUrl, email, apiToken } = getJiraConfig();
+  const url = new URL(`${baseUrl}/rest/agile/1.0${path}`);
+  return doRequest(url, { email, apiToken, method, body, query });
+}
+
+async function doRequest(url, { email, apiToken, method = "GET", body, query } = {}) {
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -265,6 +276,8 @@ export async function createIssue(input) {
     body: { fields }
   });
 
+  await tryMoveIssueToActiveSprint(created.key);
+
   const issue = await getIssue(created.key);
   return { issue, assigneeName: issue.fields.assignee?.displayName || assignee?.displayName };
 }
@@ -295,6 +308,37 @@ export async function listProjectIssues() {
   });
 
   return result.issues || [];
+}
+
+async function tryMoveIssueToActiveSprint(issueKey) {
+  const { boardId } = getJiraConfig();
+
+  if (!boardId) {
+    return;
+  }
+
+  try {
+    const sprintResult = await jiraSoftwareRequest(`/board/${boardId}/sprint`, {
+      query: {
+        state: "active",
+        maxResults: 1
+      }
+    });
+
+    const activeSprint = sprintResult?.values?.[0];
+    if (!activeSprint?.id) {
+      return;
+    }
+
+    await jiraSoftwareRequest(`/sprint/${activeSprint.id}/issue`, {
+      method: "POST",
+      body: {
+        issues: [issueKey]
+      }
+    });
+  } catch (error) {
+    console.error(`Nao foi possivel mover ${issueKey} para a sprint ativa:`, error.message);
+  }
 }
 
 export async function updateIssue(issueKey, input) {
