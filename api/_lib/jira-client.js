@@ -1,0 +1,293 @@
+const JIRA_API_BASE = "/rest/api/3";
+
+function getRequiredEnv(name) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`Env ausente: ${name}`);
+  }
+
+  return value;
+}
+
+function getJiraConfig() {
+  return {
+    baseUrl: getRequiredEnv("JIRA_BASE_URL").replace(/\/$/, ""),
+    email: getRequiredEnv("JIRA_EMAIL"),
+    apiToken: getRequiredEnv("JIRA_API_TOKEN"),
+    projectKey: getRequiredEnv("JIRA_PROJECT_KEY"),
+    defaultIssueType: process.env.JIRA_DEFAULT_ISSUE_TYPE || "Task"
+  };
+}
+
+function getAuthHeader(email, apiToken) {
+  const token = Buffer.from(`${email}:${apiToken}`).toString("base64");
+  return `Basic ${token}`;
+}
+
+async function jiraRequest(path, { method = "GET", body, query } = {}) {
+  const { baseUrl, email, apiToken } = getJiraConfig();
+  const url = new URL(`${baseUrl}${JIRA_API_BASE}${path}`);
+
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined && value !== null && value !== "") {
+        url.searchParams.set(key, value);
+      }
+    }
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers: {
+      Accept: "application/json",
+      Authorization: getAuthHeader(email, apiToken),
+      "Content-Type": "application/json"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  const text = await response.text();
+  const payload = text ? safeJsonParse(text) : null;
+
+  if (!response.ok) {
+    const message =
+      payload?.errorMessages?.join(", ") ||
+      payload?.errors?.summary ||
+      payload?.message ||
+      text ||
+      `Jira respondeu com status ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+function safeJsonParse(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function truncate(value, maxLength) {
+  if (!value || value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 3)}...`;
+}
+
+function textToAdf(text) {
+  return {
+    type: "doc",
+    version: 1,
+    content: [
+      {
+        type: "paragraph",
+        content: text
+          ? [
+              {
+                type: "text",
+                text
+              }
+            ]
+          : []
+      }
+    ]
+  };
+}
+
+function adfToText(node) {
+  if (!node) return "";
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(adfToText).join("");
+  if (node.type === "text") return node.text || "";
+  return adfToText(node.content);
+}
+
+function normalizeDueDate(value) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (["-", "none", "null", "nenhum"].includes(trimmed.toLowerCase())) {
+    return null;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new Error("A data_limite precisa estar no formato YYYY-MM-DD.");
+  }
+
+  return trimmed;
+}
+
+async function resolveAssignee(assignee) {
+  if (!assignee) return undefined;
+
+  const value = assignee.trim();
+  if (!value) return undefined;
+  if (["-", "none", "null", "nenhum", "ninguem"].includes(value.toLowerCase())) {
+    return null;
+  }
+
+  if (value.startsWith("id:")) {
+    return { accountId: value.slice(3).trim() };
+  }
+
+  const { projectKey } = getJiraConfig();
+  const users = await jiraRequest("/user/assignable/search", {
+    query: {
+      project: projectKey,
+      query: value
+    }
+  });
+
+  if (!Array.isArray(users) || users.length === 0) {
+    throw new Error(`Nao encontrei responsavel para "${value}".`);
+  }
+
+  const exactMatch =
+    users.find((user) => user.accountId === value) ||
+    users.find(
+      (user) =>
+        user.displayName?.toLowerCase() === value.toLowerCase() ||
+        user.emailAddress?.toLowerCase() === value.toLowerCase()
+    );
+
+  if (exactMatch) {
+    return { accountId: exactMatch.accountId, displayName: exactMatch.displayName };
+  }
+
+  if (users.length > 1) {
+    const suggestions = users
+      .slice(0, 5)
+      .map((user) => user.displayName)
+      .filter(Boolean)
+      .join(", ");
+
+    throw new Error(
+      `Encontrei mais de um responsavel para "${value}". Tente um nome mais especifico ou use id:ACCOUNT_ID. Sugestoes: ${suggestions}`
+    );
+  }
+
+  return { accountId: users[0].accountId, displayName: users[0].displayName };
+}
+
+function buildIssueFields({
+  summary,
+  description,
+  issueType,
+  assigneeAccountId,
+  dueDate,
+  includeProject = false
+}) {
+  const { projectKey, defaultIssueType } = getJiraConfig();
+  const fields = {};
+
+  if (includeProject) {
+    fields.project = { key: projectKey };
+    fields.issuetype = { name: issueType || defaultIssueType };
+  }
+
+  if (summary !== undefined) fields.summary = summary;
+  if (description !== undefined) fields.description = textToAdf(description);
+  if (assigneeAccountId !== undefined) {
+    fields.assignee = assigneeAccountId ? { accountId: assigneeAccountId } : null;
+  }
+  if (dueDate !== undefined) fields.duedate = dueDate || null;
+
+  return fields;
+}
+
+export async function createIssue(input) {
+  if (!input.summary?.trim()) {
+    throw new Error("O titulo da tarefa e obrigatorio.");
+  }
+
+  const assignee = await resolveAssignee(input.assignee);
+  const dueDate = normalizeDueDate(input.dueDate);
+  const fields = buildIssueFields({
+    summary: input.summary.trim(),
+    description: input.description?.trim(),
+    issueType: input.issueType?.trim(),
+    assigneeAccountId: assignee?.accountId,
+    dueDate,
+    includeProject: true
+  });
+
+  const created = await jiraRequest("/issue", {
+    method: "POST",
+    body: { fields }
+  });
+
+  const issue = await getIssue(created.key);
+  return { issue, assigneeName: issue.fields.assignee?.displayName || assignee?.displayName };
+}
+
+export async function getIssue(issueKey) {
+  if (!issueKey?.trim()) {
+    throw new Error("A chave da issue e obrigatoria.");
+  }
+
+  return jiraRequest(`/issue/${encodeURIComponent(issueKey.trim())}`, {
+    query: {
+      fields: "summary,description,assignee,duedate,status,issuetype,project"
+    }
+  });
+}
+
+export async function updateIssue(issueKey, input) {
+  const assignee =
+    input.assignee !== undefined ? await resolveAssignee(input.assignee) : undefined;
+  const dueDate =
+    input.dueDate !== undefined ? normalizeDueDate(input.dueDate) || null : undefined;
+  const fields = buildIssueFields({
+    summary: input.summary?.trim(),
+    description: input.description?.trim(),
+    assigneeAccountId:
+      input.assignee !== undefined ? assignee?.accountId || null : undefined,
+    dueDate
+  });
+
+  if (Object.keys(fields).length === 0) {
+    throw new Error("Informe ao menos um campo para atualizar.");
+  }
+
+  await jiraRequest(`/issue/${encodeURIComponent(issueKey.trim())}`, {
+    method: "PUT",
+    body: { fields }
+  });
+
+  const issue = await getIssue(issueKey);
+  return { issue, assigneeName: issue.fields.assignee?.displayName || assignee?.displayName };
+}
+
+export async function deleteIssue(issueKey) {
+  if (!issueKey?.trim()) {
+    throw new Error("A chave da issue e obrigatoria.");
+  }
+
+  await jiraRequest(`/issue/${encodeURIComponent(issueKey.trim())}`, {
+    method: "DELETE"
+  });
+}
+
+export function formatIssue(issue) {
+  const summary = issue.fields?.summary || "Sem resumo";
+  const status = issue.fields?.status?.name || "Sem status";
+  const assignee = issue.fields?.assignee?.displayName || "Nao definido";
+  const dueDate = issue.fields?.duedate || "Sem data limite";
+  const description =
+    truncate(adfToText(issue.fields?.description).trim(), 500) || "Sem descricao";
+
+  return [
+    `Chave: ${issue.key}`,
+    `Titulo: ${summary}`,
+    `Status: ${status}`,
+    `Responsavel: ${assignee}`,
+    `Data limite: ${dueDate}`,
+    `Descricao: ${description}`
+  ].join("\n");
+}
