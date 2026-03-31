@@ -3,8 +3,10 @@ import crypto from "crypto";
 import {
   createIssue,
   deleteIssue,
+  formatIssueGroups,
   formatIssue,
   getIssue,
+  listProjectIssues,
   updateIssue
 } from "./_lib/jira-client.js";
 
@@ -77,6 +79,8 @@ async function handleCommand(interaction) {
       return handleCreate(subcommand.options);
     case "ver":
       return handleRead(subcommand.options);
+    case "ver_todos":
+      return handleListAll();
     case "atualizar":
       return handleUpdate(subcommand.options);
     case "deletar":
@@ -104,6 +108,11 @@ async function handleCreate(options) {
 async function handleRead(options) {
   const issue = await getIssue(getOptionValue(options, "chave"));
   return [buildIssueLink(issue), formatIssue(issue)].join("\n");
+}
+
+async function handleListAll() {
+  const issues = await listProjectIssues();
+  return formatIssueGroups(issues);
 }
 
 async function handleUpdate(options) {

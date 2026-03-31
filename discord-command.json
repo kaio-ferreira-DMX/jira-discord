@@ -60,6 +60,11 @@
     },
     {
       "type": 1,
+      "name": "ver_todos",
+      "description": "Lista as tarefas do projeto agrupadas por status"
+    },
+    {
+      "type": 1,
       "name": "atualizar",
       "description": "Atualiza uma issue do Jira",
       "options": [

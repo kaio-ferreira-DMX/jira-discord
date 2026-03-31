@@ -277,6 +277,21 @@ export async function getIssue(issueKey) {
   });
 }
 
+export async function listProjectIssues() {
+  const { projectKey } = getJiraConfig();
+
+  const result = await jiraRequest("/search/jql", {
+    method: "POST",
+    body: {
+      jql: `project = ${projectKey} ORDER BY created DESC`,
+      maxResults: 100,
+      fields: ["summary", "status", "assignee", "duedate"]
+    }
+  });
+
+  return result.issues || [];
+}
+
 export async function updateIssue(issueKey, input) {
   const assignee =
     input.assignee !== undefined || input.discordUserId !== undefined
@@ -349,4 +364,29 @@ export function formatIssue(issue) {
     `Labels: ${labels}`,
     `Descricao: ${description}`
   ].join("\n");
+}
+
+export function formatIssueGroups(issues) {
+  if (!issues.length) {
+    return "Nenhuma tarefa encontrada no projeto.";
+  }
+
+  const groups = new Map();
+
+  for (const issue of issues) {
+    const status = issue.fields?.status?.name || "Sem status";
+
+    if (!groups.has(status)) {
+      groups.set(status, []);
+    }
+
+    const assignee = issue.fields?.assignee?.displayName || "Sem responsavel";
+    const dueDate = issue.fields?.duedate ? ` | vence ${issue.fields.duedate}` : "";
+
+    groups.get(status).push(`- ${issue.key}: ${issue.fields?.summary || "Sem resumo"} | ${assignee}${dueDate}`);
+  }
+
+  return Array.from(groups.entries())
+    .map(([status, items]) => [`${status.toUpperCase()}`, ...items].join("\n"))
+    .join("\n\n");
 }
