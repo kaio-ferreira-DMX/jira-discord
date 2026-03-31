@@ -1,5 +1,6 @@
 import crypto from "crypto";
 
+import { syncKanbanMessage } from "./_lib/discord-kanban.js";
 import {
   createIssue,
   formatIssueList,
@@ -110,6 +111,10 @@ async function handleCreate(options) {
     priority: getOptionValue(options, "prioridade")
   });
 
+  await syncKanbanMessage().catch((error) => {
+    console.error("Erro ao sincronizar quadro Kanban:", error.message);
+  });
+
   return [`Issue criada com sucesso.`, buildIssueLink(result.issue), formatIssue(result.issue)].join(
     "\n"
   );
@@ -141,6 +146,10 @@ async function handleUpdate(options) {
     priority: getOptionValue(options, "prioridade")
   });
 
+  await syncKanbanMessage().catch((error) => {
+    console.error("Erro ao sincronizar quadro Kanban:", error.message);
+  });
+
   return [
     `Issue atualizada com sucesso.`,
     buildIssueLink(result.issue),
@@ -151,6 +160,9 @@ async function handleUpdate(options) {
 async function handleDelete(options) {
   const issueKey = getOptionValue(options, "chave");
   await deleteIssue(issueKey);
+  await syncKanbanMessage().catch((error) => {
+    console.error("Erro ao sincronizar quadro Kanban:", error.message);
+  });
   return `Issue ${issueKey} deletada com sucesso.`;
 }
 

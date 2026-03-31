@@ -1,3 +1,5 @@
+import { syncKanbanMessage } from "./_lib/discord-kanban.js";
+
 export default async function handler(req, res) {
   const secretFromQuery =
     req.query?.secret ||
@@ -55,6 +57,10 @@ export default async function handler(req, res) {
       console.error("Erro Discord:", text);
       return res.status(500).json({ error: "Erro ao enviar pro Discord" });
     }
+
+    await syncKanbanMessage().catch((error) => {
+      console.error("Erro ao sincronizar quadro Kanban:", error.message);
+    });
 
     return res.status(200).json({ ok: true, webhookEvent });
 
