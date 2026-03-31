@@ -287,7 +287,9 @@ export async function updateIssue(issueKey, input) {
     summary: input.summary?.trim(),
     description: input.description?.trim(),
     assigneeAccountId:
-      input.assignee !== undefined ? assignee?.accountId || null : undefined,
+      input.assignee !== undefined || input.discordUserId !== undefined
+        ? assignee?.accountId || null
+        : undefined,
     dueDate
   });
 
