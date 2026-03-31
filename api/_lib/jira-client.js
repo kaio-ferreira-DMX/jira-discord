@@ -271,7 +271,8 @@ export async function getIssue(issueKey) {
 
   return jiraRequest(`/issue/${encodeURIComponent(issueKey.trim())}`, {
     query: {
-      fields: "summary,description,assignee,duedate,status,issuetype,project"
+      fields:
+        "summary,description,assignee,duedate,status,issuetype,project,priority,reporter,creator,created,updated,labels"
     }
   });
 }
@@ -318,18 +319,34 @@ export async function deleteIssue(issueKey) {
 
 export function formatIssue(issue) {
   const summary = issue.fields?.summary || "Sem resumo";
+  const project = issue.fields?.project?.key || "Sem projeto";
+  const issueType = issue.fields?.issuetype?.name || "Sem tipo";
   const status = issue.fields?.status?.name || "Sem status";
+  const priority = issue.fields?.priority?.name || "Sem prioridade";
   const assignee = issue.fields?.assignee?.displayName || "Nao definido";
+  const reporter = issue.fields?.reporter?.displayName || "Nao definido";
+  const creator = issue.fields?.creator?.displayName || "Nao definido";
   const dueDate = issue.fields?.duedate || "Sem data limite";
+  const created = issue.fields?.created || "Sem data de criacao";
+  const updated = issue.fields?.updated || "Sem data de atualizacao";
+  const labels = issue.fields?.labels?.length ? issue.fields.labels.join(", ") : "Sem labels";
   const description =
     truncate(adfToText(issue.fields?.description).trim(), 500) || "Sem descricao";
 
   return [
     `Chave: ${issue.key}`,
+    `Projeto: ${project}`,
     `Titulo: ${summary}`,
+    `Tipo: ${issueType}`,
     `Status: ${status}`,
+    `Prioridade: ${priority}`,
     `Responsavel: ${assignee}`,
+    `Reporter: ${reporter}`,
+    `Criador: ${creator}`,
     `Data limite: ${dueDate}`,
+    `Criado em: ${created}`,
+    `Atualizado em: ${updated}`,
+    `Labels: ${labels}`,
     `Descricao: ${description}`
   ].join("\n");
 }
