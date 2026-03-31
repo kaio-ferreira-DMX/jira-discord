@@ -16,7 +16,8 @@ function getJiraConfig() {
     email: getRequiredEnv("JIRA_EMAIL"),
     apiToken: getRequiredEnv("JIRA_API_TOKEN"),
     projectKey: getRequiredEnv("JIRA_PROJECT_KEY"),
-    defaultIssueType: process.env.JIRA_DEFAULT_ISSUE_TYPE || "Task"
+    defaultIssueType: process.env.JIRA_DEFAULT_ISSUE_TYPE || "Task",
+    discordJiraUserMap: safeJsonParse(process.env.DISCORD_JIRA_USER_MAP || "{}") || {}
   };
 }
 
@@ -116,14 +117,52 @@ function normalizeDueDate(value) {
     return null;
   }
 
+  const brazilianFormat = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brazilianFormat) {
+    const [, day, month, year] = brazilianFormat;
+    return `${year}-${month}-${day}`;
+  }
+
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    throw new Error("A data_limite precisa estar no formato YYYY-MM-DD.");
+    throw new Error("A data_limite precisa estar no formato YYYY-MM-DD ou DD/MM/YYYY.");
   }
 
   return trimmed;
 }
 
-async function resolveAssignee(assignee) {
+async function resolveAssignee(assignee, discordUserId) {
+  const { projectKey, discordJiraUserMap } = getJiraConfig();
+
+  if (discordUserId) {
+    const mappedValue = discordJiraUserMap[discordUserId];
+
+    if (!mappedValue) {
+      throw new Error(
+        `Nao encontrei mapeamento para o usuario do Discord ${discordUserId}. Configure DISCORD_JIRA_USER_MAP com esse ID.`
+      );
+    }
+
+    if (mappedValue.startsWith("id:")) {
+      return { accountId: mappedValue.slice(3).trim() };
+    }
+
+    const mappedUsers = await jiraRequest("/user/assignable/search", {
+      query: {
+        project: projectKey,
+        query: mappedValue
+      }
+    });
+
+    if (!Array.isArray(mappedUsers) || mappedUsers.length === 0) {
+      throw new Error(`Nao encontrei responsavel no Jira para o mapeamento "${mappedValue}".`);
+    }
+
+    return {
+      accountId: mappedUsers[0].accountId,
+      displayName: mappedUsers[0].displayName
+    };
+  }
+
   if (!assignee) return undefined;
 
   const value = assignee.trim();
@@ -136,7 +175,6 @@ async function resolveAssignee(assignee) {
     return { accountId: value.slice(3).trim() };
   }
 
-  const { projectKey } = getJiraConfig();
   const users = await jiraRequest("/user/assignable/search", {
     query: {
       project: projectKey,
@@ -206,7 +244,7 @@ export async function createIssue(input) {
     throw new Error("O titulo da tarefa e obrigatorio.");
   }
 
-  const assignee = await resolveAssignee(input.assignee);
+  const assignee = await resolveAssignee(input.assignee, input.discordUserId);
   const dueDate = normalizeDueDate(input.dueDate);
   const fields = buildIssueFields({
     summary: input.summary.trim(),
@@ -240,7 +278,9 @@ export async function getIssue(issueKey) {
 
 export async function updateIssue(issueKey, input) {
   const assignee =
-    input.assignee !== undefined ? await resolveAssignee(input.assignee) : undefined;
+    input.assignee !== undefined || input.discordUserId !== undefined
+      ? await resolveAssignee(input.assignee, input.discordUserId)
+      : undefined;
   const dueDate =
     input.dueDate !== undefined ? normalizeDueDate(input.dueDate) || null : undefined;
   const fields = buildIssueFields({

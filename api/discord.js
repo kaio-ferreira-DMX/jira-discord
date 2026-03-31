@@ -91,6 +91,7 @@ async function handleCreate(options) {
     summary: getOptionValue(options, "titulo"),
     description: getOptionValue(options, "descricao"),
     assignee: getOptionValue(options, "responsavel"),
+    discordUserId: getOptionValue(options, "responsavel_discord"),
     dueDate: getOptionValue(options, "data_limite"),
     issueType: getOptionValue(options, "tipo")
   });
@@ -110,6 +111,7 @@ async function handleUpdate(options) {
     summary: getOptionValue(options, "titulo"),
     description: getOptionValue(options, "descricao"),
     assignee: getOptionValue(options, "responsavel"),
+    discordUserId: getOptionValue(options, "responsavel_discord"),
     dueDate: getOptionValue(options, "data_limite")
   });
 

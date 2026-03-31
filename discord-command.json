@@ -22,13 +22,19 @@
         {
           "type": 3,
           "name": "responsavel",
-          "description": "Nome, email ou id:ACCOUNT_ID do responsavel",
+          "description": "Nome, email ou id:ACCOUNT_ID do responsavel no Jira",
+          "required": false
+        },
+        {
+          "type": 6,
+          "name": "responsavel_discord",
+          "description": "Usuario do Discord mapeado para um responsavel no Jira",
           "required": false
         },
         {
           "type": 3,
           "name": "data_limite",
-          "description": "Data limite no formato YYYY-MM-DD",
+          "description": "Data limite em YYYY-MM-DD ou DD/MM/YYYY",
           "required": false
         },
         {
@@ -82,9 +88,15 @@
           "required": false
         },
         {
+          "type": 6,
+          "name": "responsavel_discord",
+          "description": "Usuario do Discord mapeado para um responsavel no Jira",
+          "required": false
+        },
+        {
           "type": 3,
           "name": "data_limite",
-          "description": "YYYY-MM-DD ou '-' para limpar",
+          "description": "YYYY-MM-DD, DD/MM/YYYY ou '-' para limpar",
           "required": false
         }
       ]
