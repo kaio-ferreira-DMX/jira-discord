@@ -2,10 +2,12 @@ import crypto from "crypto";
 
 import {
   createIssue,
+  formatIssueList,
   deleteIssue,
   formatIssueGroups,
   formatIssue,
   getIssue,
+  listProjectIssuesByCategory,
   listProjectIssues,
   updateIssue
 } from "./_lib/jira-client.js";
@@ -54,6 +56,11 @@ export default async function handler(req, res) {
       return sendMessage(res, "Tipo de interacao nao suportado.");
     }
 
+    const authorizationError = getAuthorizationError(interaction);
+    if (authorizationError) {
+      return sendMessage(res, authorizationError);
+    }
+
     const result = await handleCommand(interaction);
     return sendMessage(res, result);
   } catch (error) {
@@ -81,6 +88,8 @@ async function handleCommand(interaction) {
       return handleRead(subcommand.options);
     case "ver_todos":
       return handleListAll();
+    case "ver_categoria":
+      return handleListByCategory(subcommand.options);
     case "atualizar":
       return handleUpdate(subcommand.options);
     case "deletar":
@@ -114,6 +123,12 @@ async function handleRead(options) {
 async function handleListAll() {
   const issues = await listProjectIssues();
   return formatIssueGroups(issues);
+}
+
+async function handleListByCategory(options) {
+  const category = getOptionValue(options, "categoria");
+  const issues = await listProjectIssuesByCategory(category);
+  return formatIssueList(`Categoria: ${category}`, issues);
 }
 
 async function handleUpdate(options) {
@@ -230,6 +245,35 @@ function getDiscordPublicKey(publicKeyHex) {
 function buildIssueLink(issue) {
   const baseUrl = process.env.JIRA_BASE_URL?.replace(/\/$/, "");
   return baseUrl ? `${baseUrl}/browse/${issue.key}` : issue.key;
+}
+
+function getAuthorizationError(interaction) {
+  const allowedUserIds = splitCsv(process.env.DISCORD_ALLOWED_USER_IDS);
+  const allowedRoleIds = splitCsv(process.env.DISCORD_ALLOWED_ROLE_IDS);
+
+  if (!allowedUserIds.length && !allowedRoleIds.length) {
+    return null;
+  }
+
+  const userId = interaction.member?.user?.id || interaction.user?.id;
+  const roleIds = interaction.member?.roles || [];
+
+  if (allowedUserIds.includes(userId)) {
+    return null;
+  }
+
+  if (allowedRoleIds.some((roleId) => roleIds.includes(roleId))) {
+    return null;
+  }
+
+  return "Voce nao tem permissao para usar este comando.";
+}
+
+function splitCsv(value) {
+  return (value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function truncate(value, maxLength) {

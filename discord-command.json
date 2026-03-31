@@ -71,6 +71,37 @@
     },
     {
       "type": 1,
+      "name": "ver_categoria",
+      "description": "Lista as tarefas de uma categoria do quadro",
+      "options": [
+        {
+          "type": 3,
+          "name": "categoria",
+          "description": "Categoria do quadro",
+          "required": true,
+          "choices": [
+            {
+              "name": "A Fazer",
+              "value": "a_fazer"
+            },
+            {
+              "name": "Em Andamento",
+              "value": "em_andamento"
+            },
+            {
+              "name": "Em Análise",
+              "value": "em_analise"
+            },
+            {
+              "name": "Concluído",
+              "value": "concluido"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": 1,
       "name": "atualizar",
       "description": "Atualiza uma issue do Jira",
       "options": [

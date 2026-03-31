@@ -310,6 +310,13 @@ export async function listProjectIssues() {
   return result.issues || [];
 }
 
+const CATEGORY_MATCHERS = {
+  a_fazer: ["a fazer", "to do", "todo", "backlog"],
+  em_andamento: ["em andamento", "in progress", "doing", "desenvolvimento"],
+  em_analise: ["em analise", "em análise", "analysis", "review", "qa"],
+  concluido: ["concluido", "concluído", "done", "closed", "finalizado"]
+};
+
 async function tryMoveIssueToActiveSprint(issueKey) {
   const { boardId } = getJiraConfig();
 
@@ -440,4 +447,42 @@ export function formatIssueGroups(issues) {
   return Array.from(groups.entries())
     .map(([status, items]) => [`${status.toUpperCase()}`, ...items].join("\n"))
     .join("\n\n");
+}
+
+export async function listProjectIssuesByCategory(category) {
+  const issues = await listProjectIssues();
+  const normalizedCategory = normalizeStatus(category);
+  const matchers = CATEGORY_MATCHERS[normalizedCategory];
+
+  if (!matchers) {
+    throw new Error("Categoria invalida. Use a_fazer, em_andamento, em_analise ou concluido.");
+  }
+
+  return issues.filter((issue) => {
+    const status = normalizeStatus(issue.fields?.status?.name || "");
+    return matchers.some((matcher) => status.includes(normalizeStatus(matcher)));
+  });
+}
+
+export function formatIssueList(title, issues) {
+  if (!issues.length) {
+    return `${title}\nNenhuma tarefa encontrada.`;
+  }
+
+  return [
+    title,
+    ...issues.map((issue) => {
+      const assignee = issue.fields?.assignee?.displayName || "Sem responsavel";
+      const dueDate = issue.fields?.duedate ? ` | vence ${issue.fields.duedate}` : "";
+      return `- ${issue.key}: ${issue.fields?.summary || "Sem resumo"} | ${assignee}${dueDate}`;
+    })
+  ].join("\n");
+}
+
+function normalizeStatus(value) {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
