@@ -219,6 +219,7 @@ function buildIssueFields({
   issueType,
   assigneeAccountId,
   dueDate,
+  priorityName,
   includeProject = false
 }) {
   const { projectKey, defaultIssueType } = getJiraConfig();
@@ -235,6 +236,9 @@ function buildIssueFields({
     fields.assignee = assigneeAccountId ? { accountId: assigneeAccountId } : null;
   }
   if (dueDate !== undefined) fields.duedate = dueDate || null;
+  if (priorityName !== undefined) {
+    fields.priority = priorityName ? { name: priorityName } : null;
+  }
 
   return fields;
 }
@@ -252,6 +256,7 @@ export async function createIssue(input) {
     issueType: input.issueType?.trim(),
     assigneeAccountId: assignee?.accountId,
     dueDate,
+    priorityName: input.priority?.trim(),
     includeProject: true
   });
 
@@ -306,7 +311,9 @@ export async function updateIssue(issueKey, input) {
       input.assignee !== undefined || input.discordUserId !== undefined
         ? assignee?.accountId || null
         : undefined,
-    dueDate
+    dueDate,
+    priorityName:
+      input.priority !== undefined ? input.priority?.trim() || null : undefined
   });
 
   if (Object.keys(fields).length === 0) {

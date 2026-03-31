@@ -97,7 +97,8 @@ async function handleCreate(options) {
     assignee: getOptionValue(options, "responsavel"),
     discordUserId: getOptionValue(options, "responsavel_discord"),
     dueDate: getOptionValue(options, "data_limite"),
-    issueType: getOptionValue(options, "tipo")
+    issueType: getOptionValue(options, "tipo"),
+    priority: getOptionValue(options, "prioridade")
   });
 
   return [`Issue criada com sucesso.`, buildIssueLink(result.issue), formatIssue(result.issue)].join(
@@ -121,7 +122,8 @@ async function handleUpdate(options) {
     description: getOptionValue(options, "descricao"),
     assignee: getOptionValue(options, "responsavel"),
     discordUserId: getOptionValue(options, "responsavel_discord"),
-    dueDate: getOptionValue(options, "data_limite")
+    dueDate: getOptionValue(options, "data_limite"),
+    priority: getOptionValue(options, "prioridade")
   });
 
   return [

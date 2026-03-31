@@ -42,6 +42,12 @@
           "name": "tipo",
           "description": "Tipo da issue, ex: Task, Bug, Story",
           "required": false
+        },
+        {
+          "type": 3,
+          "name": "prioridade",
+          "description": "Prioridade no Jira, ex: Highest, High, Medium, Low",
+          "required": false
         }
       ]
     },
@@ -102,6 +108,12 @@
           "type": 3,
           "name": "data_limite",
           "description": "YYYY-MM-DD, DD/MM/YYYY ou '-' para limpar",
+          "required": false
+        },
+        {
+          "type": 3,
+          "name": "prioridade",
+          "description": "Prioridade no Jira ou '-' para limpar",
           "required": false
         }
       ]
