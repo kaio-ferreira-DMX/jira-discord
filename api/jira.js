@@ -1,4 +1,10 @@
 export default async function handler(req, res) {
+  const secretFromQuery =
+    req.query?.secret ||
+    (req.url
+      ? new URL(req.url, "http://localhost").searchParams.get("secret")
+      : null);
+
   // 🔹 Só aceita POST
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method Not Allowed" });
@@ -6,7 +12,7 @@ export default async function handler(req, res) {
 
   // 🔹 Validação do token (só se existir SECRET)
   if (process.env.SECRET) {
-    const token = req.headers["x-token"];
+    const token = req.headers["x-token"] || secretFromQuery;
 
     if (!token || token !== process.env.SECRET) {
       return res.status(403).json({ error: "Forbidden" });
